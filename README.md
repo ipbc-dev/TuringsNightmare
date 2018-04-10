@@ -2,7 +2,7 @@
 An experimental PoW algorithm developed by IPBC
 Intended to be ASIC resistant and to favor CPU over GPU
 
-Idea based on (Core War)[https://en.wikipedia.org/wiki/Core_War].
+Idea based on [Core War](https://en.wikipedia.org/wiki/Core_War).
 
 ## Concept
 The idea of the algorithm is to have a "large" memory-pad, into which input data is loaded, and then using a "Virtual Machine" to interprete each byte in memory as an "instruction".
