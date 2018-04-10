@@ -10,3 +10,5 @@ The instructions themselves all do different things to alter the state of the me
 At the end of the execution loop, all VM State and the memory-pad are hashed with one of 3 hashing algorithms, giving the end result.
 
 Reading the code should give you a good idea of the intent.
+
+There is still a lot of work to be done, like adding more instructions (intent is to have 255), making things harder for asics/gpus, what additional steps to take, so everything here is subject to change.
