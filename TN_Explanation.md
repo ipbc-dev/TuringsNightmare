@@ -1,25 +1,25 @@
 ## NOTE
-Everything here is subject to change. It should give a good overview of the principle of the idea, though.
+Everything here is subject to change. It should give a good overview of the principle of the idea, though.  
 The code here is already slightly out of date.
 
 ## Core Idea
-The basic idea of TuringsNightmare (TN) as a PoW is that instead of always taking the same steps, the path of execution in the algorithm (what gets executed, in what order, and what changes because of it) is completely dependent on the input data in unpredictable ways. 
-The reasoning behind this is that GPU's are not great at diverging branches and threads taking different amount of steps to complete, and ASIC's implementing all the dynamics of the algorithm would be exceedingly expensive to produce, and likely inefficient, while CPU's do just fine.
+The basic idea of TuringsNightmare (TN) as a PoW is that instead of always taking the same steps, the path of execution in the algorithm (what gets executed, in what order, and what changes because of it) is completely dependent on the input data in unpredictable ways.   
+The reasoning behind this is that GPU's are not great at diverging branches and threads taking different amount of steps to complete, and ASIC's implementing all the dynamics of the algorithm would be exceedingly expensive to produce, and likely inefficient, while CPU's do just fine.   
 
 ## General outline of algorithm
-Start by allocating VM_State to hold all state information and the memory buffer (currently fixed size of 1MB).
-Fill the memory buffer with input data (currently just copied into the buffer as often as it will fit, will likely be changed to AES generation like in cryptonight or something similar).
-Initialize the keccak part of VM_State by hashing the current content of the memory buffer. These keccak state values will be used later.
-The execution loop will run a certain amount of steps. This amount is not fixed, so we set up a minimum, maximum, and starting step limit. The current step limit will change during execution, staying beetween min and max.
-Exact numbers on how these limits will be calculated are not decided yet.
-Enter the execution loop:
+Start by allocating VM_State to hold all state information and the memory buffer (currently fixed size of 1MB).  
+Fill the memory buffer with input data (currently just copied into the buffer as often as it will fit, will likely be changed to AES generation like in cryptonight or something similar).  
+Initialize the keccak part of VM_State by hashing the current content of the memory buffer. These keccak state values will be used later.  
+The execution loop will run a certain amount of steps. This amount is not fixed, so we set up a minimum, maximum, and starting step limit. The current step limit will change during execution, staying beetween min and max.  
+Exact numbers on how these limits will be calculated are not decided yet.  
+Enter the execution loop:  
 * Check that state.step_counter <= state.step_limit, exit loop if not.
 * Grab a byte from the location in the memory buffer indexed by state.instruction_ptr (starts at 0).
 * Based on the byte (xored with parts of the state), decide which instruction to execute.
 * Apply the instruction to the state, modifying the memory buffer and potentially varying parts of state. (Pseudorandom memory changes, state registers altered, instruction_ptr changed to cause jumps, step_limit increased/decreased, etc).
 * Increment state.instruction_ptr.
 * Increment state.step_counter.
-After the execution loop is finished, hash VM_State + Memory buffer with one of a few (currently 3) hashing algorithms (like in cryptonight), choosing of which is dependent on VM_State, and return the result.
+After the execution loop is finished, hash VM_State + Memory buffer with one of a few (currently 3) hashing algorithms (like in cryptonight), choosing of which is dependent on VM_State, and return the result.  
 
 ## Annotated Code Walkthrough (Code as of time of writing)
 * Here is the main function you would call to calculate the TN hash of an input:
