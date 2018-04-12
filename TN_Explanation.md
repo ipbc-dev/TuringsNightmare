@@ -18,7 +18,8 @@ Enter the execution loop:
 * Based on the byte (xored with parts of the state), decide which instruction to execute.
 * Apply the instruction to the state, modifying the memory buffer and potentially varying parts of state. (Pseudorandom memory changes, state registers altered, instruction_ptr changed to cause jumps, step_limit increased/decreased, etc).
 * Increment state.instruction_ptr.
-* Increment state.step_counter.
+* Increment state.step_counter.  
+
 After the execution loop is finished, hash VM_State + Memory buffer with one of a few (currently 3) hashing algorithms (like in cryptonight), choosing of which is dependent on VM_State, and return the result.  
 
 ## Annotated Code Walkthrough (Code as of time of writing)
