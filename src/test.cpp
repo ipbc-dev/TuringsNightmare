@@ -24,49 +24,16 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#include "utility.h"
-#include "StringTools.h"
+#include "misc/utility.h"
+#include "misc/StringTools.h"
+
 #include "TuringsNightmare.h"
-#include "TuringsNightmareCL.h"
+#include "cpu/TuringsNightmareCPU.h"
+#include "opencl/TuringsNightmareCL.h"
+#include "cuda/TuringsNightmareCUDA.h"
+
 #include <chrono>
 #include <algorithm>
-#include <thread>
-
-std::string HashMe(const std::string& data) {
-	char hash[HASH_SIZE];
-	int retcode = Turings_Nightmare(data.c_str(), data.size(), hash);
-	if (retcode == 0) {
-		print("Failed to hash! 0 returned.");
-		return "[FAIL]";
-	}
-	return StringTools::toHex(hash, HASH_SIZE);
-}
-
-std::string HashMeCL(const std::string& data) {
-	char hash[HASH_SIZE];
-	int retcode = Turings_NightmareCL(data.c_str(), data.size(), hash);
-	if (retcode == 0) {
-		print("Failed to hash! 0 returned.");
-		return "[FAIL]";
-	}
-	return StringTools::toHex(hash, HASH_SIZE);
-}
-
-void TestHash(const std::string& data) {
-	char hash[HASH_SIZE];
-	auto start = std::chrono::high_resolution_clock::now();
-	int retcode = Turings_Nightmare(data.c_str(), data.size(), hash);
-	auto elapsed = std::chrono::high_resolution_clock::now() - start;
-
-	if (retcode == 0) {
-		print("Failed to hash! 0 returned.");
-	}
-	else {
-		std::string hashstr = StringTools::toHex(hash, HASH_SIZE);
-		long double milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
-		print("Hashed " << data.size() << " chars in " << milliseconds << " ms, " << hashstr);
-	}
-}
 
 std::string random_string(size_t length)
 {
@@ -84,39 +51,87 @@ std::string random_string(size_t length)
 	return str;
 }
 
-size_t hash_counter = 0;
+void TestTNSanity(const std::string &input) {
+	VM_State *tnCPU = TN_VM_Init(input.c_str(), input.length());
+	VM_State *tnCUDA = TN_VM_Init(input.c_str(), input.length());
+	VM_State *tnCL = TN_VM_Init(input.c_str(), input.length());
 
-void Hash_Thread() {
-	print("Thread start");
-	for (int x = 0; x < 1000; x++) {
-		std::string data = random_string(150);
-		HashMe(data);
-		hash_counter++;
+	char cpuHash[HASH_SIZE], cudaHash[HASH_SIZE], clHash[HASH_SIZE];
+
+	DeviceCPU cpu;
+	cpu.run(1, tnCPU);
+
+	TN_VM_Finalize(tnCPU, cpuHash);
+
+	std::cout << "Sanity checking CUDA... ";
+	std::cout.flush();
+
+	DeviceCUDA cuda;
+	cuda.run(1, tnCUDA);
+	TN_VM_Finalize(tnCUDA, cudaHash);
+	if (strncmp(cpuHash, cudaHash, HASH_SIZE)) {
+		std::cout << "FAILED!!!" << std::endl;
+	} else {
+		std::cout << "Sane" << std::endl;
 	}
-	print("Thread end");
+
+	std::cout << "Sanity checking OpenCL... ";
+	std::cout.flush();
+
+	DeviceCL cl;
+	cl.run(1, tnCL);
+	TN_VM_Finalize(tnCL, clHash);
+	if (strncmp(cpuHash, cudaHash, HASH_SIZE)) {
+		std::cout << "FAILED!!!" << std::endl;
+	}
+	else {
+		std::cout << "Sane" << std::endl;
+	}
+}
+
+template <typename Device> void TestTNSpeed(const size_t N, const bool divergent, const std::string &input) {
+	Device dev;
+
+	VM_State *base = TN_VM_Init(input.c_str(), input.length());
+
+	VM_State *mem = new VM_State[N];
+	for (size_t i = 0; i < N; ++i) {
+		memcpy(mem + i, base, sizeof(VM_State));
+		if (divergent) mem[i].memory[0] ^= i;
+	}
+
+	auto start = std::chrono::high_resolution_clock::now();
+
+	dev.run(N, mem);
+
+	auto elapsed = std::chrono::high_resolution_clock::now() - start;
+	auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+
+	std::cout << dev.name() << " running " << N << " instances took " << milliseconds << "ms" << std::endl;
+	std::cout.flush();
+	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 }
 
 int main(int argc, char* argv[]) {
-	std::cout << "Checking sanity... " << std::endl;
-	std::string sanity = random_string(50);
-	if (HashMe(sanity) != HashMeCL(sanity)) {
-		print("SANITY FAIL - OH GOD HELP US");
+	std::string input = random_string(50);
+
+	TestTNSanity(input);
+
+	size_t sizes[] = { 1, 5, 10, 20 };
+
+	std::cout << std::endl << "Running speed tests (no divergence)" << std::endl;
+	for (auto N : sizes) {
+		std::cout << std::endl;
+		TestTNSpeed<DeviceCPU>(N, false, input);
+		TestTNSpeed<DeviceCUDA>(N, false, input);
+		TestTNSpeed<DeviceCL>(N, false, input);
 	}
-	else {
-		print("Sane");
+
+	std::cout << std::endl << "Running speed tests (divergent)" << std::endl;
+	for (auto N : sizes) {
+		std::cout << std::endl;
+		TestTNSpeed<DeviceCPU>(N, true, input);
+		TestTNSpeed<DeviceCUDA>(N, true, input);
+		TestTNSpeed<DeviceCL>(N, true, input);
 	}
-
-	/*
-	std::string data1 = "dfsf235rawfef4asdfasdfsadf4gdfg";
-	TestHash(data1);
-
-	std::string data2 = "asd79f6a09 cz34iowhr9wh7o3znasdfasdfqohwvn978z 7zq8z9r82q78zhr7qw 3h78 3z2 q78gz3872gh2	jlö<k=Q U";
-	TestHash(data2);
-
-	std::string data3 = "0";
-	TestHash(data3);
-
-	std::string data4 = "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-	TestHash(data4);
-	*/
 }

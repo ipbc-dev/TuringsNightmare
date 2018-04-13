@@ -1,4 +1,3 @@
-R"===(
 /*
 Copyright 2018 Interplanetary Broadcast Coin SL
 
@@ -24,47 +23,28 @@ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+#include "cuda/TuringsNightmareCUDA.h"
 
-#define MEMORY_SIZE 1024 * 1024 * 1
+#include <cstring>
 
-typedef struct {
-	ulong instruction_ptr;
-	ulong step_counter;
-	ulong step_limit;
+// TODO: cleanup utility dependencies
+#include <chrono>
+#include <iostream>
 
-	ulong step_limit_max;
-	ulong step_limit_min;
+#define ENTANGLED_UINT8 (uint8_t)(state->step_counter ^ state->register_a ^ state->register_b ^ state->register_c ^ state->register_d ^ state->hs.w[state->step_counter % 25] ^ state->hs.b[state->step_counter % 200] ^ state->step_limit ^ state->input_size)
+#define ENTANGLED_UINT32 (uint32_t)(state->step_counter ^ state->register_a ^ state->register_b ^ state->register_c ^ state->register_d ^ state->hs.w[state->step_counter % 25] ^ state->hs.b[state->step_counter % 200] ^ state->step_limit ^ state->input_size)
+#define ENTANGLED_UINT64 (uint64_t)(state->step_counter ^ state->register_a ^ state->register_b ^ state->register_c ^ state->register_d ^ state->hs.w[state->step_counter % 25] ^ state->hs.b[state->step_counter % 200] ^ state->step_limit ^ state->input_size)
 
-	ulong input_size;
-	ulong memory_size;
-	union {
-		uchar b[200];
-		ulong w[25];
-	} hs;
-	
-	ulong register_a;
-	ulong register_b;
-	ulong register_c;
-	ulong register_d;
-
-	uchar memory[MEMORY_SIZE];
-} VM_State;
-
-#define ENTANGLED_UINT8 (uchar)(state->step_counter ^ state->register_a ^ state->register_b ^ state->register_c ^ state->register_d ^ state->hs.w[state->step_counter % 25] ^ state->hs.b[state->step_counter % 200] ^ state->step_limit ^ state->input_size)
-#define ENTANGLED_UINT32 (uint)(state->step_counter ^ state->register_a ^ state->register_b ^ state->register_c ^ state->register_d ^ state->hs.w[state->step_counter % 25] ^ state->hs.b[state->step_counter % 200] ^ state->step_limit ^ state->input_size)
-#define ENTANGLED_UINT64 (ulong)(state->step_counter ^ state->register_a ^ state->register_b ^ state->register_c ^ state->register_d ^ state->hs.w[state->step_counter % 25] ^ state->hs.b[state->step_counter % 200] ^ state->step_limit ^ state->input_size)
-
-inline uchar* TN_AtRelPos(VM_State *state, int position) {
-	long pos = state->instruction_ptr;
-	pos += position;
-	if (pos >= state->memory_size) pos = pos % state->memory_size;
-	while (pos < 0) { pos += state->memory_size; }
-
+__device__
+inline uint8_t* TN_AtRelPos(VM_State *state, int position) {
+	uint64_t pos = state->instruction_ptr + position;
+	if (pos >= state->memory_size) pos %= state->memory_size;
 	return state->memory + pos;
 }
 
 #define MEM(relpos) *TN_AtRelPos(state, relpos)
 
+__device__
 inline void TN_AdjustCycleLimit(VM_State *state, int change) {
 	state->step_limit += change;
 
@@ -74,25 +54,7 @@ inline void TN_AdjustCycleLimit(VM_State *state, int change) {
 
 #define MODCYCLES(change) TN_AdjustCycleLimit(state, change)
 
-typedef enum {
-	NOOP = 0,
-	XOR,
-	XOR2,
-	XOR3,
-	DIV,
-	ADD,
-	SUB,
-	INSTPTR,
-	JUMP,
-	REGA_XOR,
-	REGB_XOR,
-	REGC_XOR,
-	REGD_XOR,
-	CYCLEADD,
-	CYCLESUB,
-	_LAST
-} VM_Instruction;
-
+__device__
 inline void TN_ParseInstruction(VM_State *state, VM_Instruction inst) {
 	switch (inst) {
 	case XOR:
@@ -150,21 +112,32 @@ inline void TN_ParseInstruction(VM_State *state, VM_Instruction inst) {
 	}
 }
 
+__device__
 VM_Instruction TN_GetInstruction(VM_State *state) {
 	return (VM_Instruction)((state->memory[state->instruction_ptr] ^ ENTANGLED_UINT64) % _LAST);
 }
 
-kernel void Turings_Nightmare(global VM_State *mem, ulong n) {
-	size_t i = get_global_id(0);
-	if (i < n) {
-		global VM_State *state = &mem[i];
-		#pragma unroll 2
-		for (; state->step_counter <= state->step_limit; state->step_counter++) {
-			VM_Instruction inst = TN_GetInstruction(state);
-			TN_ParseInstruction(state, inst);
-			state->instruction_ptr = (state->instruction_ptr + 1) % state->memory_size;
-		}
+__global__
+void TN_VM_Execute_CUDA(VM_State *mem) {
+	VM_State *state = &mem[threadIdx.x];
+	for (; state->step_counter <= state->step_limit; state->step_counter++) {
+		VM_Instruction inst = TN_GetInstruction(state);
+		TN_ParseInstruction(state, inst);
+		state->instruction_ptr = (state->instruction_ptr + 1) % state->memory_size;
 	}
 }
 
-)==="
+void DeviceCUDA::run(const size_t N, VM_State *states) {
+	VM_State *buf;
+	cudaMalloc((void**)&buf, sizeof(VM_State) * N);
+	cudaMemcpy(buf, states, sizeof(VM_State) * N, cudaMemcpyHostToDevice);
+
+	dim3 dimBlock(N, 1);
+	dim3 dimGrid(1, 1);
+
+	TN_VM_Execute_CUDA<<<dimGrid, dimBlock>>>(buf);
+
+	cudaDeviceSynchronize();
+	cudaMemcpy(states, buf, sizeof(VM_State) * N, cudaMemcpyDeviceToHost);
+	cudaFree(buf);
+}

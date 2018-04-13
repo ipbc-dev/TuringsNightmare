@@ -23,66 +23,16 @@ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-#ifndef __TURINGS_NIGHTMARE_H__
-#define __TURINGS_NIGHTMARE_H__
+#ifndef __TURINGS_NIGHTMARE_CUDA_H__
+#define __TURINGS_NIGHTMARE_CUDA_H__
 #pragma once
 
-#include <cstdint>
+#include "TuringsNightmare.h"
 
-#define HASH_SIZE 32
-
-#define MEMORY_SIZE 1024 * 1024 * 1 
-//#define MEMORY_SIZE 150
-
-#define MIN_CYCLES 1
-#define NRM_CYCLES 2
-#define MAX_CYCLES 4
-
-union hash_state {
-	uint8_t b[200];
-	uint64_t w[25];
+class DeviceCUDA {
+public:
+	const char *name() { return "CUDA"; }
+	void run(const size_t N, VM_State *states);
 };
-
-typedef struct {
-	uint64_t instruction_ptr;
-	uint64_t step_counter;
-	uint64_t step_limit;
-
-	uint64_t step_limit_max;
-	uint64_t step_limit_min;
-
-	uint64_t input_size;
-	uint64_t memory_size;
-	hash_state hs;
-
-	uint64_t register_a;
-	uint64_t register_b;
-	uint64_t register_c;
-	uint64_t register_d;
-
-	uint8_t memory[MEMORY_SIZE];
-} VM_State;
-
-typedef enum {
-	NOOP = 0,
-	XOR,
-	XOR2,
-	XOR3,
-	DIV,
-	ADD,
-	SUB,
-	INSTPTR,
-	JUMP,
-	REGA_XOR,
-	REGB_XOR,
-	REGC_XOR,
-	REGD_XOR,
-	CYCLEADD,
-	CYCLESUB,
-	_LAST
-} VM_Instruction;
-
-VM_State *TN_VM_Init(const char *in, const size_t in_len);
-void TN_VM_Finalize(const VM_State *state, char *out);
 
 #endif

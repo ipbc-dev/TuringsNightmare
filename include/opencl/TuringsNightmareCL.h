@@ -27,8 +27,27 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define __TURINGS_NIGHTMARE_CL_H__
 #pragma once
 
-#define HASH_SIZE 32
+#include "TuringsNightmare.h"
 
-int Turings_NightmareCL(const char* in, const size_t in_len, char* out);
+#define __CL_ENABLE_EXCEPTIONS
+#include <CL/cl.hpp>
+
+class DeviceCL {
+public:
+	DeviceCL();
+
+	const char *name() { return "OpenCL"; }
+	void run(const size_t N, VM_State *states);
+
+private:
+	void init(cl::Device dev);
+
+private:
+	cl::Device device;
+	cl::Context context;
+	cl::Kernel kernel;
+	cl::CommandQueue queue;
+	cl::Program program;
+};
 
 #endif

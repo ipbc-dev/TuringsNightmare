@@ -3,7 +3,7 @@
 // A baseline Keccak (3rd round) implementation.
 
 //#include "hash-ops.h"
-#include "keccak.h"
+#include "crypto/keccak.h"
 
 #define HASH_DATA_AREA 136
 

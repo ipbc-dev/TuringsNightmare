@@ -3,32 +3,36 @@ project(TuringsNightmare)
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-set(TuringsNightmare_source
-  "${CMAKE_CURRENT_SOURCE_DIR}/src/jh.c"
-  "${CMAKE_CURRENT_SOURCE_DIR}/src/blake256.c"
-  "${CMAKE_CURRENT_SOURCE_DIR}/src/groestl.c"
-  "${CMAKE_CURRENT_SOURCE_DIR}/src/keccak.c"
-  "${CMAKE_CURRENT_SOURCE_DIR}/src/StringTools.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/src/TuringsNightmare.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/src/TuringsNightmareCL.cpp"
+file(GLOB TN_COMMON_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/misc/*.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/crypto/*.c"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/cpu/*.cpp"
 )
 
-set(TuringsNightmare_include
-  "${CMAKE_CURRENT_SOURCE_DIR}/include/jh.h"
-  "${CMAKE_CURRENT_SOURCE_DIR}/include/blake256.h"
-  "${CMAKE_CURRENT_SOURCE_DIR}/include/groestl.h"
-  "${CMAKE_CURRENT_SOURCE_DIR}/include/groestl_tables.h"
-  "${CMAKE_CURRENT_SOURCE_DIR}/include/keccak.h"
-  "${CMAKE_CURRENT_SOURCE_DIR}/include/StringTools.h"
-  "${CMAKE_CURRENT_SOURCE_DIR}/include/TuringsNightmare.h"
-  "${CMAKE_CURRENT_SOURCE_DIR}/include/TuringsNightmareCL.h"
-)
+add_library(tn-common STATIC ${TN_COMMON_SRC})
 
-find_package( OpenCL REQUIRED )
+# TODO: Move common stuff to TN common lib
+# add_library(tn-backend-common STATIC ${BACKEND_COMMON_SRC})
+# add_library(tn-backend-cpu STATIC ${BACKEND_CPU_SRC})
+# target_link_libraries(tn-backend-cpu tn-backend-common)
 
-include_directories( ${OpenCL_INCLUDE_DIR} )
+# TODO: Make OpenCL & CUDA Optional
+find_package(OpenCL 1.2)
+if(OPENCL_FOUND)
+  include_directories(${OpenCL_INCLUDE_DIR})
+  file(GLOB TN_DEVICE_OPENCL_SRC "src/opencl/*.cpp")
+  add_library(tn-device-opencl STATIC ${TN_DEVICE_OPENCL_SRC})
+  target_link_libraries(tn-device-opencl tn-common ${OpenCL_LIBRARY})
+endif()
 
-add_library(TuringsNightmare ${TuringsNightmare_source} ${TuringsNightmare_include} )
+find_package(Cuda 9.1)
+if(CUDA_FOUND)
+  include_directories(${CUDA_INCLUDE_DIRS})
+  file(GLOB TN_DEVICE_CUDA_SRC "src/cuda/*.cu")
+  cuda_add_library(tn-device-cuda STATIC ${TN_DEVICE_CUDA_SRC})
+  target_link_libraries(tn-device-cuda tn-common ${CUDA_LIBRARIES})
+endif()
 
-add_executable(test ${CMAKE_CURRENT_SOURCE_DIR}/src/test.cpp ${CMAKE_CURRENT_SOURCE_DIR}/include/utility.h)
-target_link_libraries(test TuringsNightmare ${OpenCL_LIBRARY})
+add_executable(test ${CMAKE_CURRENT_SOURCE_DIR}/src/test.cpp)
+target_link_libraries(test tn-common tn-device-opencl tn-device-cuda)

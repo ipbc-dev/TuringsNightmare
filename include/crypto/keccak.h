@@ -15,11 +15,6 @@
 #define ROTL64(x, y) (((x) << (y)) | ((x) >> (64 - (y))))
 #endif
 
-union hash_state {
-	uint8_t b[200];
-	uint64_t w[25];
-};
-
 // compute a keccak hash (md) of given byte length from "in"
 int keccak(const uint8_t *in, int inlen, uint8_t *md, int mdlen);
 
