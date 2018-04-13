@@ -268,4 +268,4 @@ inline void TN_FinalHash(const VM_State& state, const uint8_t* data, const size_
 }
 ```
 
-* And that is all the relevant code. Hope it was understandable. ~F.Harms and M.Behm
+* And that is all the relevant code.
